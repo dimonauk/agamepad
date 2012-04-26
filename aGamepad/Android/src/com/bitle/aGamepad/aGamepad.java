@@ -7,6 +7,7 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -18,6 +19,13 @@ import android.widget.EditText;
 import com.bitle.views.MyButton;
 
 public class aGamepad extends Activity implements OnClickListener  {
+	private PowerManager powerManager;
+	private WakeLock wakeLock;
+	private SensorManager sensManager;
+	private MySensorListener sensListener;
+	private NetworkThread thread;
+	private DataSender sender;
+	private GamepadController gamepadController;
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -25,18 +33,18 @@ public class aGamepad extends Activity implements OnClickListener  {
 		setContentView(R.layout.main);
 		
 		//Log.d("aGamepad", "onCreate");
-		// Оставляем ориентацию постоянно в Landscape
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
-		// Оставляем экран постоянно включенным
-		pm = (PowerManager) getSystemService(POWER_SERVICE);
-		wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK, null);
+		powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+		try {
+			wakeLock = powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK, "aGamepad");
+		} catch (Exception e) {
+			Log.e("aGamepad", "Can't get wakelog", e);
+		}
 
-		// Запускаем обработчик сенсора
 		sensManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 		sensListener = new MySensorListener();
 		
-		//Регистрируем обработчики для кнопок
 		((MyButton)findViewById(R.id.btnUp)).setOnButtonActionListener(new MyButtonListener());
 		((MyButton)findViewById(R.id.btnRight)).setOnButtonActionListener(new MyButtonListener());
 		((MyButton)findViewById(R.id.btnDown)).setOnButtonActionListener(new MyButtonListener());
@@ -44,7 +52,7 @@ public class aGamepad extends Activity implements OnClickListener  {
 		Button btnIp = (Button) findViewById(R.id.btnIp);
 		btnIp.setOnClickListener(this);
 		
-		gc = GamepadController.getInstance();
+		gamepadController = GamepadController.getInstance();
 		//Log.d("aGamepad", "onCreate:Starting thread");
 	}
 
@@ -76,7 +84,9 @@ public class aGamepad extends Activity implements OnClickListener  {
 	@Override
 	protected void onPause() {
 		//Log.d("aGamepad", "onPause start");
-		wakeLock.release();
+		if (wakeLock != null) {
+			wakeLock.release();
+		}
 		if (thread != null)
 			thread.Pause();
 		sensManager.unregisterListener(sensListener);
@@ -87,7 +97,9 @@ public class aGamepad extends Activity implements OnClickListener  {
 	@Override
 	protected void onResume() {
 		//Log.d("aGamepad", "onResume start");
-		wakeLock.acquire();
+		if (wakeLock != null) {
+			wakeLock.acquire();
+		}
 		if (thread != null)
 			thread.WakeUp();
 		sensManager.registerListener(sensListener, sensManager
@@ -106,7 +118,6 @@ public class aGamepad extends Activity implements OnClickListener  {
 		et.setFocusable(false);
 		Settings.setReceiverIP(et.getText().toString());
 		
-		//Запускаем сокет
 		sender = new DataSender(Settings.getReceiverIP(), Settings.getReceiverPort());
 		try {
 			sender.Start();
@@ -114,7 +125,6 @@ public class aGamepad extends Activity implements OnClickListener  {
 			e.printStackTrace();
 		}
 		
-		//Запускаем тред для сети
 		thread = new NetworkThread(sender);
 		thread.setName("NetThread");
 		thread.start();
@@ -123,10 +133,10 @@ public class aGamepad extends Activity implements OnClickListener  {
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK){
-			gc.buttonDown(5);
+			gamepadController.buttonDown(5);
 			return true;
 		} else if (keyCode == KeyEvent.KEYCODE_SEARCH) {
-			gc.buttonDown(6);
+			gamepadController.buttonDown(6);
 			return true;
 		} else
 			return super.onKeyDown(keyCode, event);
@@ -135,21 +145,12 @@ public class aGamepad extends Activity implements OnClickListener  {
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
 		if (keyCode == KeyEvent.KEYCODE_BACK){
-			gc.buttonUp(5);
+			gamepadController.buttonUp(5);
 			return true;
 		} else if (keyCode == KeyEvent.KEYCODE_SEARCH) {
-			gc.buttonUp(6);
+			gamepadController.buttonUp(6);
 			return true;
 		} else
 			return super.onKeyUp(keyCode, event);
 	}
-
-	private PowerManager pm;
-	private WakeLock wakeLock;
-	private SensorManager sensManager;
-	private MySensorListener sensListener;
-	private NetworkThread thread;
-	private DataSender sender;
-	private GamepadController gc;
-
 }
